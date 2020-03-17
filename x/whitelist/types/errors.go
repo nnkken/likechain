@@ -1,18 +1,11 @@
 package types
 
 import (
-	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/staking"
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+	"github.com/cosmos/cosmos-sdk/x/staking/types"
 )
 
-const (
-	DefaultCodespace sdk.CodespaceType = ModuleName
+var (
+	ErrInvalidApprover          = sdkerrors.Register(types.ModuleName, 101, "approver address is invalid")
+	ErrValidatorNotInWEhitelist = sdkerrors.Register(types.ModuleName, 102, "validator not in whitelist")
 )
-
-func ErrInvalidApprover(codespace sdk.CodespaceType) sdk.Error {
-	return sdk.NewError(codespace, sdk.CodeInvalidAddress, "approver address is invalid")
-}
-
-func ErrValidatorNotInWEhitelist(codespace sdk.CodespaceType) sdk.Error {
-	return sdk.NewError(codespace, staking.CodeInvalidValidator, "validator not in whitelist")
-}

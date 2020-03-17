@@ -14,20 +14,14 @@ type Keeper struct {
 	storeKey   sdk.StoreKey
 	cdc        *codec.Codec
 	paramstore params.Subspace
-	codespace  sdk.CodespaceType
 }
 
-func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, paramstore params.Subspace, codespace sdk.CodespaceType) Keeper {
+func NewKeeper(cdc *codec.Codec, key sdk.StoreKey, paramstore params.Subspace) Keeper {
 	return Keeper{
 		storeKey:   key,
 		cdc:        cdc,
 		paramstore: paramstore.WithKeyTable(ParamKeyTable()),
-		codespace:  codespace,
 	}
-}
-
-func (keeper Keeper) Codespace() sdk.CodespaceType {
-	return keeper.codespace
 }
 
 func (keeper Keeper) GetWhitelist(ctx sdk.Context) (whitelist Whitelist) {

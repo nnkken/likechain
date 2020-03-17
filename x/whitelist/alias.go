@@ -21,7 +21,6 @@ var (
 	KeyApprover                 = types.KeyApprover
 	DefaultParams               = types.DefaultParams
 	DefaultGenesisState         = types.DefaultGenesisState
-	DefaultCodespace            = types.DefaultCodespace
 	ValidateGenesis             = types.ValidateGenesis
 	WhitelistKey                = types.WhitelistKey
 	EventTypeSetWhitelist       = types.EventTypeSetWhitelist

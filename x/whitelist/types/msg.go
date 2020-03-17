@@ -30,9 +30,9 @@ func (msg MsgSetWhitelist) GetSignBytes() []byte {
 	return sdk.MustSortJSON(bz)
 }
 
-func (msg MsgSetWhitelist) ValidateBasic() sdk.Error {
+func (msg MsgSetWhitelist) ValidateBasic() error {
 	if msg.Approver.Empty() {
-		return ErrInvalidApprover(DefaultCodespace)
+		return ErrInvalidApprover
 	}
 	return nil
 }

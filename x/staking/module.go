@@ -17,11 +17,10 @@ type AppModule struct {
 	whitelistKeeper whitelist.Keeper
 }
 
-func NewAppModule(stakingKeeper staking.Keeper, distrKeeper stakingTypes.DistributionKeeper,
-	accKeeper stakingTypes.AccountKeeper, supplyKeeper stakingTypes.SupplyKeeper,
-	whitelistKeeper whitelist.Keeper) AppModule {
+func NewAppModule(stakingKeeper staking.Keeper, accKeeper stakingTypes.AccountKeeper,
+	supplyKeeper stakingTypes.SupplyKeeper, whitelistKeeper whitelist.Keeper) AppModule {
 	return AppModule{
-		AppModule:       staking.NewAppModule(stakingKeeper, distrKeeper, accKeeper, supplyKeeper),
+		AppModule:       staking.NewAppModule(stakingKeeper, accKeeper, supplyKeeper),
 		whitelistKeeper: whitelistKeeper,
 	}
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/context"
+	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/likecoin/likechain/x/whitelist/types"
@@ -22,7 +23,7 @@ func GetQueryCmd(queryRoute string, cdc *codec.Codec) *cobra.Command {
 		SuggestionsMinimumDistance: 2,
 		RunE:                       client.ValidateCmd,
 	}
-	whitelistQueryCmd.AddCommand(client.GetCommands(
+	whitelistQueryCmd.AddCommand(flags.GetCommands(
 		GetCmdQueryWhitelist(queryRoute, cdc),
 		GetCmdQueryApprover(queryRoute, cdc),
 	)...)

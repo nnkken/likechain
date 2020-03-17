@@ -1,6 +1,8 @@
 package whitelist
 
 import (
+	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
+
 	"encoding/json"
 	"fmt"
 
@@ -9,21 +11,21 @@ import (
 )
 
 func NewHandler(keeper Keeper) sdk.Handler {
-	return func(ctx sdk.Context, msg sdk.Msg) sdk.Result {
+	return func(ctx sdk.Context, msg sdk.Msg) (*sdk.Result, error) {
 		switch msg := msg.(type) {
 		case MsgSetWhitelist:
 			return handleMsgSetWhitelist(ctx, msg, keeper)
 		default:
 			errMsg := fmt.Sprintf("unrecognized whitelist message type: %T", msg)
-			return sdk.ErrUnknownRequest(errMsg).Result()
+			return nil, sdkerrors.Wrap(sdkerrors.ErrUnknownRequest, errMsg)
 		}
 	}
 }
 
-func handleMsgSetWhitelist(ctx sdk.Context, msg MsgSetWhitelist, keeper Keeper) sdk.Result {
+func handleMsgSetWhitelist(ctx sdk.Context, msg MsgSetWhitelist, keeper Keeper) (*sdk.Result, error) {
 	approver := keeper.Approver(ctx)
 	if !approver.Equals(msg.Approver) {
-		return ErrInvalidApprover(keeper.Codespace()).Result()
+		return nil, ErrInvalidApprover
 	}
 	keeper.SetWhitelist(ctx, msg.Whitelist)
 	bz, err := json.Marshal(msg.Whitelist)
@@ -42,32 +44,32 @@ func handleMsgSetWhitelist(ctx sdk.Context, msg MsgSetWhitelist, keeper Keeper) 
 		),
 	})
 
-	return sdk.Result{Events: ctx.EventManager().Events()}
+	return &sdk.Result{Events: ctx.EventManager().Events()}, nil
 }
 
 func WrapStakingHandler(keeper Keeper, stakingHandler sdk.Handler) sdk.Handler {
-	return func(ctx sdk.Context, msg sdk.Msg) sdk.Result {
+	return func(ctx sdk.Context, msg sdk.Msg) (*sdk.Result, error) {
 		ctx = ctx.WithEventManager(sdk.NewEventManager())
 		switch msg := msg.(type) {
 		case staking.MsgCreateValidator:
-			result := checkWhitelist(ctx, keeper, msg)
-			if result.Code != 0 {
-				return result
+			err := checkWhitelist(ctx, keeper, msg)
+			if err != nil {
+				return nil, err
 			}
 		}
 		return stakingHandler(ctx, msg)
 	}
 }
 
-func checkWhitelist(ctx sdk.Context, keeper Keeper, msg staking.MsgCreateValidator) sdk.Result {
+func checkWhitelist(ctx sdk.Context, keeper Keeper, msg staking.MsgCreateValidator) error {
 	whitelist := keeper.GetWhitelist(ctx)
 	if len(whitelist) > 0 {
 		for _, v := range whitelist {
 			if msg.ValidatorAddress.Equals(v) {
-				return sdk.Result{Code: 0}
+				return nil
 			}
 		}
-		return ErrValidatorNotInWEhitelist(keeper.Codespace()).Result()
+		return ErrValidatorNotInWEhitelist
 	}
-	return sdk.Result{}
+	return nil
 }

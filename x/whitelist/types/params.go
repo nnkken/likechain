@@ -18,10 +18,22 @@ var (
 
 var _ params.ParamSet = (*Params)(nil)
 
+func validateApprover(i interface{}) error {
+	s, ok := i.(string)
+	if !ok {
+		return fmt.Errorf("invalid parameter type: %T", i)
+	}
+	_, err := sdk.AccAddressFromBech32(s)
+	if err != nil {
+		return fmt.Errorf("invalid Bech32 address: %v", err)
+	}
+	return nil
+}
+
 // Implements params.ParamSet
 func (p *Params) ParamSetPairs() params.ParamSetPairs {
 	return params.ParamSetPairs{
-		{KeyApprover, &p.Approver},
+		{KeyApprover, &p.Approver, validateApprover},
 	}
 }
 
