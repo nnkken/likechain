@@ -26,7 +26,6 @@ func NewQuerier(k Keeper) sdk.Querier {
 			return queryCidBlockGetSize(ctx, req, k)
 		case QueryCidBlockHas:
 			return queryCidBlockHas(ctx, req, k)
-		// TODO: QueryIscnContent, QueryStakeholders, QueryRights, QueryRightTerms
 		default:
 			return nil, sdk.ErrUnknownRequest("unknown iscn query endpoint")
 		}
@@ -43,7 +42,8 @@ func queryParams(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.
 }
 
 func queryKernel(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.Error) {
-	kernelCID := k.GetIscnKernelCIDByIscnID(ctx, req.Data)
+	id := IscnIDFromBytes(req.Data)
+	kernelCID := k.GetIscnKernelCIDByIscnID(ctx, id)
 	if kernelCID == nil {
 		return nil, nil
 	}

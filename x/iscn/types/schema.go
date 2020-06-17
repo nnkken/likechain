@@ -52,9 +52,12 @@ var ContentSchema = NewSchemaValidator(
 		InType(None),
 		IsCIDWithCodec(IscnContentCodecType),
 	)),
-	Field("source", InType(None, String)),
+	Field("source", Any(
+		InType(None),
+		IsURL,
+	)),
 	Field("edition", InType(None, String)),
-	Field("fingerprint", InType(String)), // TODO: schema with hash://.../... format
+	Field("fingerprint", IsURL),
 	Field("title", InType(String)),
 	Field("description", InType(None, String)),
 	Field("tags", Any(
@@ -64,7 +67,7 @@ var ContentSchema = NewSchemaValidator(
 )
 
 var KernelSchema = NewSchemaValidator(
-	Field("timestamp", InType(String)),
+	Field("timestamp", IsTimestamp),
 	Field("version", IsUint64),
 	Field("parent", Any(
 		InType(None),

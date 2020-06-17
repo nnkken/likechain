@@ -12,7 +12,6 @@ import (
 	"github.com/tendermint/tendermint/crypto/tmhash"
 
 	gocid "github.com/ipfs/go-cid"
-	cbornode "github.com/ipfs/go-ipld-cbor"
 	mh "github.com/multiformats/go-multihash"
 
 	iscnblock "github.com/likecoin/iscn-ipld/plugin/block"
@@ -101,22 +100,6 @@ func (k Keeper) GetCidIscnObject(ctx sdk.Context, cid CID) iscnblock.IscnObject 
 	return obj
 }
 
-func (k Keeper) GetCidIscnData(ctx sdk.Context, cid CID) *IscnData {
-	bz := k.GetCidBlock(ctx, cid)
-	if bz == nil {
-		return nil
-	}
-	// TODO: everything go for IscnObject flow
-	// old flow
-	data := IscnData{}
-	// TODO: deserialize by IPFS block
-	err := cbornode.DecodeInto(bz, &data)
-	if err != nil {
-		return nil
-	}
-	return &data
-}
-
 func (k Keeper) SetCidIscnObject(
 	ctx sdk.Context, data IscnData,
 	codec uint64, schemaVersion uint64,
@@ -127,25 +110,6 @@ func (k Keeper) SetCidIscnObject(
 	}
 	bz := obj.RawData()
 	cid := obj.Cid()
-
-	k.SetCidBlock(ctx, cid, bz)
-	return &cid, nil
-}
-
-func (k Keeper) SetCidIscnData(ctx sdk.Context, data interface{}, codec uint64) (*CID, error) {
-	// TODO: serialize by IPFS block
-	bz, err := cbornode.DumpObject(data)
-	if err != nil {
-		return nil, err
-	}
-	// TODO: compute CID by IPFS block
-	cid, err := gocid.V1Builder{
-		Codec:  codec,
-		MhType: mh.SHA2_256,
-	}.Sum(bz)
-	if err != nil {
-		return nil, err
-	}
 
 	k.SetCidBlock(ctx, cid, bz)
 	return &cid, nil
@@ -243,7 +207,7 @@ func (k Keeper) GetIscnKernelByCID(ctx sdk.Context, cid CID) iscnblock.IscnObjec
 }
 
 func (k Keeper) GetIscnKernelCIDByIscnID(ctx sdk.Context, iscnID IscnID) *CID {
-	key := GetIscnKernelKey(iscnID)
+	key := GetIscnKernelKey(iscnID.Bytes())
 	cidBytes := ctx.KVStore(k.storeKey).Get(key)
 	if cidBytes == nil {
 		return nil
@@ -259,7 +223,8 @@ func (k Keeper) GetIscnKernelCIDByIscnID(ctx sdk.Context, iscnID IscnID) *CID {
 func (k Keeper) SetIscnKernel(ctx sdk.Context, iscnID IscnID, kernel IscnData) (*CID, error) {
 	// TODO: schemaVersion base on input context field
 	schemaVersion := uint64(1)
-	kernel.Set("id", []byte(iscnID))
+	idBytes := iscnID.Bytes()
+	kernel.Set("id", idBytes)
 	cid, err := k.setIscnObjectAndEmitEvent(
 		ctx, kernel, IscnKernelCodecType, schemaVersion, EventTypeAddIscnKernel, AttributeKeyIscnKernelCid,
 	)
@@ -267,11 +232,25 @@ func (k Keeper) SetIscnKernel(ctx sdk.Context, iscnID IscnID, kernel IscnData) (
 		return nil, err
 	}
 	cidBytes := cid.Bytes()
-	key := GetIscnKernelKey(iscnID)
+	key := GetIscnKernelKey(idBytes)
 	ctx.KVStore(k.storeKey).Set(key, cidBytes)
 	key = GetCidToIscnIDKey(cidBytes)
-	ctx.KVStore(k.storeKey).Set(key, iscnID)
+	ctx.KVStore(k.storeKey).Set(key, idBytes)
 	return cid, err
+}
+
+func (k Keeper) SetIscnOwner(ctx sdk.Context, iscnID IscnID, owner sdk.AccAddress) {
+	key := GetIscnOwnerKey(iscnID.Bytes())
+	ctx.KVStore(k.storeKey).Set(key, owner)
+}
+
+func (k Keeper) GetIscnOwner(ctx sdk.Context, iscnID IscnID) sdk.AccAddress {
+	key := GetIscnOwnerKey(iscnID.Bytes())
+	bz := ctx.KVStore(k.storeKey).Get(key)
+	if bz == nil {
+		return nil
+	}
+	return sdk.AccAddress(bz)
 }
 
 func (k Keeper) SetIscnCount(ctx sdk.Context, count uint64) {
@@ -288,13 +267,13 @@ func (k Keeper) GetIscnCount(ctx sdk.Context) uint64 {
 	return count
 }
 
-func (k Keeper) DeductFeeForIscn(ctx sdk.Context, feePayer sdk.AccAddress, tx []byte) error {
+func (k Keeper) DeductFeeForIscn(ctx sdk.Context, feePayer sdk.AccAddress, data []byte) error {
 	acc := k.accountKeeper.GetAccount(ctx, feePayer)
 	if acc == nil {
 		return fmt.Errorf("No account") // TODO: proper error
 	}
 	feePerByte := k.GetParams(ctx).FeePerByte
-	feeAmount := feePerByte.Amount.MulInt64(int64(len(tx)))
+	feeAmount := feePerByte.Amount.MulInt64(int64(len(data)))
 	fees := sdk.NewCoins(sdk.NewCoin(feePerByte.Denom, feeAmount.Ceil().RoundInt()))
 	result := auth.DeductFees(k.supplyKeeper, ctx, acc, fees)
 	if !result.IsOK() {
@@ -304,17 +283,21 @@ func (k Keeper) DeductFeeForIscn(ctx sdk.Context, feePayer sdk.AccAddress, tx []
 	return nil
 }
 
-func (k Keeper) AddIscnKernel(ctx sdk.Context, kernel IscnData) (iscnID IscnID, err error) {
+func (k Keeper) AddIscnKernel(
+	ctx sdk.Context, owner sdk.AccAddress, kernel IscnData,
+) (iscnID IscnID, err error) {
 	hasher := tmhash.New()
 	hasher.Write(ctx.BlockHeader().LastBlockId.Hash)
 	iscnCount := k.GetIscnCount(ctx)
 	k.SetIscnCount(ctx, iscnCount+1)
 	binary.Write(hasher, binary.BigEndian, iscnCount)
-	iscnID = hasher.Sum(nil)
+	idBytes := hasher.Sum(nil)
+	iscnID = IscnIDFromBytes(idBytes)
 	_, err = k.SetIscnKernel(ctx, iscnID, kernel)
 	if err != nil {
-		return nil, err
+		return iscnID, err
 	}
+	k.SetIscnOwner(ctx, iscnID, owner)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			EventTypeCreateIscn,

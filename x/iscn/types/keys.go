@@ -10,12 +10,17 @@ const (
 var (
 	CidBlockKey    = []byte{0x01}
 	IscnKernelKey  = []byte{0x02}
-	IscnCountKey   = []byte{0x03}
-	CidToIscnIDKey = []byte{0x04}
+	IscnOwnerKey   = []byte{0x03}
+	IscnCountKey   = []byte{0x04}
+	CidToIscnIDKey = []byte{0x05}
 )
 
 func GetIscnKernelKey(iscnID []byte) []byte {
 	return append(IscnKernelKey, iscnID...)
+}
+
+func GetIscnOwnerKey(iscnID []byte) []byte {
+	return append(IscnOwnerKey, iscnID...)
 }
 
 func GetCidBlockKey(cid []byte) []byte {

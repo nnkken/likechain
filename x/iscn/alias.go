@@ -32,6 +32,7 @@ var (
 	CidToIscnIDKey             = types.CidToIscnIDKey
 	GetCidBlockKey             = types.GetCidBlockKey
 	GetIscnKernelKey           = types.GetIscnKernelKey
+	GetIscnOwnerKey            = types.GetIscnOwnerKey
 	GetCidToIscnIDKey          = types.GetCidToIscnIDKey
 	IscnKernelCodecType        = types.IscnKernelCodecType
 	IscnContentCodecType       = types.IscnContentCodecType
@@ -45,6 +46,7 @@ var (
 	EventTypeAddIscnContent    = types.EventTypeAddIscnContent
 	EventTypeAddIscnKernel     = types.EventTypeAddIscnKernel
 	AttributeKeyIscnID         = types.AttributeKeyIscnID
+	AttributeKeyIscnOwner      = types.AttributeKeyIscnOwner
 	AttributeKeyIscnKernelCid  = types.AttributeKeyIscnKernelCid
 	AttributeKeyIscnContentCid = types.AttributeKeyIscnContentCid
 	AttributeKeyEntityCid      = types.AttributeKeyEntityCid
@@ -63,6 +65,8 @@ var (
 	KernelSchema               = types.KernelSchema
 	EntitySchema               = types.EntitySchema
 	RegistryID                 = types.RegistryID
+	ParseIscnID                = types.ParseIscnID
+	IscnIDFromBytes            = types.IscnIDFromBytes
 )
 
 type (

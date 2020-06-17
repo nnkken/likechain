@@ -47,10 +47,6 @@ func handleRightTerms(ctx sdk.Context, rightTerms IscnDataField, keeper Keeper) 
 		return keeper.SetRightTerms(ctx, rt)
 	case NestedCID:
 		cid, _ := rightTerms.AsCID()
-		// Not checking this, allow user to fill in any CIDs which may represent any terms hosted on the IPFS network
-		// if keeper.GetRightTerms(ctx, *cid) == nil {
-		// 	return nil, fmt.Errorf("unknown right terms CID: %s", cid)
-		// }
 		return cid, nil
 	default:
 		return nil, fmt.Errorf("right terms does not match schema")
@@ -59,8 +55,6 @@ func handleRightTerms(ctx sdk.Context, rightTerms IscnDataField, keeper Keeper) 
 
 func handleStakeholders(ctx sdk.Context, stakeholders IscnData, keeper Keeper) (*CID, error) {
 	stakeholdersArr, _ := stakeholders.Get("stakeholders").AsArray()
-	fmt.Printf("handleStakeholders: before anything\n")
-	fmt.Printf("handleStakeholders: stakeholders = %v\n", stakeholders)
 	for i := 0; i < stakeholdersArr.Len(); i++ {
 		stakeholder, _ := stakeholdersArr.Get(i).AsIscnData()
 		entityField := stakeholder.Get("stakeholder")
@@ -71,9 +65,6 @@ func handleStakeholders(ctx sdk.Context, stakeholders IscnData, keeper Keeper) (
 		stakeholder.Set("stakeholder", *cid)
 		n, _ := stakeholder.Get("sharing").AsUint64()
 		stakeholder.Set("sharing", uint32(n))
-		fmt.Printf("handleStakeholders: After i = %d\n", i)
-		fmt.Printf("handleStakeholders: stakeholder = %v\n", stakeholder)
-		fmt.Printf("handleStakeholders: stakeholders = %v\n", stakeholders)
 	}
 	schemaVersion := uint64(1)
 	return keeper.SetCidIscnObject(ctx, stakeholders, StakeholdersCodecType, schemaVersion)
@@ -105,16 +96,22 @@ func handleIscnContent(ctx sdk.Context, content IscnDataField, keeper Keeper) (*
 	switch content.Type() {
 	case NestedIscnData:
 		content, _ := content.AsIscnData()
-		parent, ok := content.Get("parent").AsCID()
-		if ok {
-			if keeper.GetEntity(ctx, *parent) == nil {
-				return nil, fmt.Errorf("unknown ISCN content parent CID: %s", parent)
-			}
-			// TODO: parent version check
-			content.Set("parent", *parent)
-		}
 		version, _ := content.Get("version").AsUint64()
 		content.Set("version", version)
+		parentCID, ok := content.Get("parent").AsCID()
+		if ok {
+			parent := keeper.GetEntity(ctx, *parentCID)
+			if keeper.GetEntity(ctx, *parentCID) == nil {
+				return nil, fmt.Errorf("unknown ISCN content parent CID: %s", parentCID)
+			}
+			parentVersion, err := parent.GetUint64("version")
+			if err != nil || parentVersion != version-1 {
+				return nil, fmt.Errorf("invalid content version: %d", version)
+			}
+			content.Set("parent", *parentCID)
+		} else if version != 1 {
+			return nil, fmt.Errorf("invalid content version, expect 1, got %d", version)
+		}
 		return keeper.SetIscnContent(ctx, content)
 	case NestedCID:
 		cid, _ := content.AsCID()
@@ -128,10 +125,6 @@ func handleIscnContent(ctx sdk.Context, content IscnDataField, keeper Keeper) (*
 }
 
 func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.Result {
-	// TODO:
-	// 1. store nested fields and construct CIDs
-	// 2. validate fields from IscnKernelInput
-	// 3. construct IscnKernel
 	kernelRawMap := RawIscnMap{}
 	err := cbornode.DecodeInto(msg.IscnKernel, &kernelRawMap)
 	if err != nil {
@@ -190,10 +183,14 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 		}
 	}
 	kernel.Set("content", *contentCID)
-	// TODO:
-	//  - kernel context?
-	//  - parent
-	//  - check timestamp not later than blocktime
+	t, _ := kernel.Get("timestamp").AsTime()
+	if t.After(ctx.BlockHeader().Time) {
+		return sdk.Result{
+			Code:      123, // TODO
+			Codespace: DefaultCodespace,
+			Log:       fmt.Sprintf("kernel time is after blocktime"),
+		}
+	}
 	version, _ := kernel.Get("version").AsUint64()
 	kernel.Set("version", version)
 	parent := kernel.Get("parent")
@@ -201,7 +198,7 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 	case None:
 		// New ISCN
 		// nil parent case version checking should be handled by ValidateBasic
-		_, err = keeper.AddIscnKernel(ctx, kernel)
+		_, err = keeper.AddIscnKernel(ctx, msg.From, kernel)
 		if err != nil {
 			return sdk.Result{
 				Code:      123, // TODO
@@ -211,8 +208,6 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 		}
 	case NestedCID:
 		// Old ISCN
-		// TODO: check msg.From is the same sender of the old ISCN
-		// Need to record ISCN owner
 		// TODO: check if the content's parent is pointing to content with the same ISCN ID
 		// seems complicated checkings for different weird cases
 		parentKernelCID, _ := parent.AsCID()
@@ -225,6 +220,17 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 			}
 		}
 		kernel.Set("parent", *parentKernelCID)
+		iscnIDBytes, _ := parentKernelObj.GetBytes("id")
+		iscnID := IscnIDFromBytes(iscnIDBytes)
+		oldOwner := keeper.GetIscnOwner(ctx, iscnID)
+		if !oldOwner.Equals(msg.From) {
+			return sdk.Result{
+				Code:      123, // TODO
+				Codespace: DefaultCodespace,
+				Log:       "sender is not the owner of the parent ISCN record",
+			}
+		}
+		// TODO: check ID in incoming kernel record
 		parentVersion, _ := parentKernelObj.GetUint64("version")
 		if version != parentVersion+1 {
 			return sdk.Result{
@@ -233,7 +239,6 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 				Log:       "invalid ISCN kernel version",
 			}
 		}
-		iscnID, _ := parentKernelObj.GetBytes("id")
 		_, err = keeper.SetIscnKernel(ctx, iscnID, kernel)
 		if err != nil {
 			return sdk.Result{

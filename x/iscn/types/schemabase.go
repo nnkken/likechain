@@ -2,6 +2,8 @@ package types
 
 import (
 	"math"
+	"net/url"
+	"time"
 
 	gocid "github.com/ipfs/go-cid"
 )
@@ -251,6 +253,30 @@ func (field IscnDataField) AsBytes() ([]byte, bool) {
 	return bz, ok
 }
 
+func (field IscnDataField) AsURL() (*url.URL, bool) {
+	s, ok := field.value.(string)
+	if !ok {
+		return nil, false
+	}
+	url, err := url.Parse(s)
+	if err != nil {
+		return nil, false
+	}
+	return url, true
+}
+
+func (field IscnDataField) AsTime() (*time.Time, bool) {
+	s, ok := field.value.(string)
+	if !ok {
+		return nil, false
+	}
+	t, err := time.Parse("2020-01-01T00:00:00Z", s)
+	if err != nil {
+		return nil, false
+	}
+	return &t, true
+}
+
 type IscnSchema func(RawIscnMap) bool
 
 func (f IscnSchema) ConstructIscnData(rawMap RawIscnMap) (IscnData, bool) {
@@ -430,12 +456,29 @@ func IsCIDWithCodec(codec uint64) ValueValidator {
 	}
 }
 
-func IsURI(v interface{}) bool {
-	// TODO
+func IsURL(v interface{}) bool {
+	switch v.(type) {
+	case string:
+		_, err := url.Parse(v.(string))
+		return err == nil
+	}
 	return false
 }
 
 func IsTimestamp(v interface{}) bool {
-	// TODO
+	switch v.(type) {
+	case string:
+		_, err := time.Parse("2020-01-01T00:00:00Z", v.(string))
+		return err == nil
+	}
+	return false
+}
+
+func IsIscnID(v interface{}) bool {
+	switch v.(type) {
+	case string:
+		_, err := ParseIscnID(v.(string))
+		return err == nil
+	}
 	return false
 }

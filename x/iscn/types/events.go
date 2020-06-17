@@ -8,6 +8,7 @@ var (
 	EventTypeAddIscnKernel  = "add_iscn_kernel"
 
 	AttributeKeyIscnID         = "iscn_id"
+	AttributeKeyIscnOwner      = "iscn_owner"
 	AttributeKeyIscnKernelCid  = "iscn_kernel_cid"
 	AttributeKeyIscnContentCid = "iscn_content_cid"
 	AttributeKeyEntityCid      = "entity_cid"
