@@ -66,8 +66,9 @@ func (msg MsgCreateIscn) ValidateBasic() sdk.Error {
 		return ErrInvalidSender(DefaultCodespace)
 	}
 	// TODO: validate IscnRecord
-	// 1. timestamps
-	// 2. if parent is empty, version should be 1
+	// 1. schema
+	// 2. timestamps
+	// 3. if parent is empty, version should be 1
 	return nil
 }
 
@@ -97,37 +98,6 @@ func (msg MsgAddEntity) GetSignBytes() []byte {
 }
 
 func (msg MsgAddEntity) ValidateBasic() sdk.Error {
-	if msg.From.Empty() {
-		return ErrInvalidSender(DefaultCodespace)
-	}
-	return nil
-}
-
-type MsgAddRightTerms struct {
-	From       sdk.AccAddress `json:"from" yaml:"from"`
-	RightTerms string         `json:"rightTerms" yaml:"rightTerms"`
-}
-
-func NewMsgAddRightTerms(from sdk.AccAddress, rightTerms string) MsgAddRightTerms {
-	return MsgAddRightTerms{
-		From:       from,
-		RightTerms: rightTerms,
-	}
-}
-
-func (msg MsgAddRightTerms) Route() string { return RouterKey }
-func (msg MsgAddRightTerms) Type() string  { return "add_right_terms" }
-
-func (msg MsgAddRightTerms) GetSigners() []sdk.AccAddress {
-	return []sdk.AccAddress{msg.From}
-}
-
-func (msg MsgAddRightTerms) GetSignBytes() []byte {
-	bz := ModuleCdc.MustMarshalJSON(msg)
-	return sdk.MustSortJSON(bz)
-}
-
-func (msg MsgAddRightTerms) ValidateBasic() sdk.Error {
 	if msg.From.Empty() {
 		return ErrInvalidSender(DefaultCodespace)
 	}

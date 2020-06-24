@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/multiformats/go-multibase"
 )
 
@@ -82,4 +83,9 @@ func IscnIDFromBytes(bz []byte) IscnID {
 		Registry: RegistryID,
 		ID:       bz,
 	}
+}
+
+type KernelRecord struct {
+	CID   CID            `json:"cid" yaml:"cid"`
+	Owner sdk.AccAddress `json:"owner" yaml:"owner"`
 }

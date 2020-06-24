@@ -32,7 +32,6 @@ var (
 	CidToIscnIDKey             = types.CidToIscnIDKey
 	GetCidBlockKey             = types.GetCidBlockKey
 	GetIscnKernelKey           = types.GetIscnKernelKey
-	GetIscnOwnerKey            = types.GetIscnOwnerKey
 	GetCidToIscnIDKey          = types.GetCidToIscnIDKey
 	IscnKernelCodecType        = types.IscnKernelCodecType
 	IscnContentCodecType       = types.IscnContentCodecType
@@ -70,15 +69,15 @@ var (
 )
 
 type (
-	MsgCreateIscn    = types.MsgCreateIscn
-	MsgAddEntity     = types.MsgAddEntity
-	MsgAddRightTerms = types.MsgAddRightTerms
-	CID              = types.CID
-	Params           = types.Params
-	GenesisState     = types.GenesisState
-	RawIscnMap       = types.RawIscnMap
-	IscnData         = types.IscnData
-	IscnDataField    = types.IscnDataField
-	IscnDataArray    = types.IscnDataArray
-	IscnID           = types.IscnID
+	MsgCreateIscn = types.MsgCreateIscn
+	MsgAddEntity  = types.MsgAddEntity
+	CID           = types.CID
+	Params        = types.Params
+	GenesisState  = types.GenesisState
+	RawIscnMap    = types.RawIscnMap
+	IscnData      = types.IscnData
+	IscnDataField = types.IscnDataField
+	IscnDataArray = types.IscnDataArray
+	IscnID        = types.IscnID
+	KernelRecord  = types.KernelRecord
 )

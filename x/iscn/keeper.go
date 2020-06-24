@@ -12,7 +12,6 @@ import (
 	"github.com/tendermint/tendermint/crypto/tmhash"
 
 	gocid "github.com/ipfs/go-cid"
-	mh "github.com/multiformats/go-multihash"
 
 	iscnblock "github.com/likecoin/iscn-ipld/plugin/block"
 )
@@ -87,6 +86,21 @@ func (k Keeper) SetCidBlock(ctx sdk.Context, cid CID, bz []byte) {
 	ctx.KVStore(k.storeKey).Set(key, bz)
 }
 
+func (k Keeper) IterateCidBlocks(ctx sdk.Context, f func(cid CID, bz []byte) bool) {
+	it := ctx.KVStore(k.storeKey).Iterator(CidBlockKey, nil)
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		_, cid, err := gocid.CidFromBytes(it.Key())
+		if err != nil {
+			// ???
+			continue
+		}
+		if f(cid, it.Value()) {
+			break
+		}
+	}
+}
+
 func (k Keeper) GetCidIscnObject(ctx sdk.Context, cid CID) iscnblock.IscnObject {
 	bz := k.GetCidBlock(ctx, cid)
 	if bz == nil {
@@ -155,38 +169,6 @@ func (k Keeper) SetEntity(ctx sdk.Context, entity IscnData) (*CID, error) {
 	)
 }
 
-func (k Keeper) GetRightTerms(ctx sdk.Context, cid CID) *string {
-	bz := k.GetCidBlock(ctx, cid)
-	if bz == nil {
-		return nil
-	}
-	terms := string(bz)
-	return &terms
-}
-
-func (k Keeper) SetRightTerms(ctx sdk.Context, terms string) (*CID, error) {
-	bz := []byte(terms)
-	cid, err := gocid.V1Builder{
-		Codec:  RightTermsCodecType,
-		MhType: mh.SHA2_256,
-	}.Sum(bz)
-	if err != nil {
-		return nil, err
-	}
-	k.SetCidBlock(ctx, cid, bz)
-	cidStr, err := cid.StringOfBase(CidMbaseEncoder.Encoding())
-	if err != nil {
-		return nil, err
-	}
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			EventTypeAddRightTerms,
-			sdk.NewAttribute(AttributeKeyRightTermsCid, cidStr),
-		),
-	)
-	return &cid, nil
-}
-
 func (k Keeper) GetIscnContent(ctx sdk.Context, cid CID) iscnblock.IscnObject {
 	return k.checkCodecAndGetIscnObject(ctx, cid, IscnContentCodecType)
 }
@@ -206,51 +188,44 @@ func (k Keeper) GetIscnKernelByCID(ctx sdk.Context, cid CID) iscnblock.IscnObjec
 	return k.GetCidIscnObject(ctx, cid)
 }
 
-func (k Keeper) GetIscnKernelCIDByIscnID(ctx sdk.Context, iscnID IscnID) *CID {
-	key := GetIscnKernelKey(iscnID.Bytes())
-	cidBytes := ctx.KVStore(k.storeKey).Get(key)
-	if cidBytes == nil {
-		return nil
-	}
-	_, cid, err := gocid.CidFromBytes(cidBytes)
-	if err != nil {
-		// TODO: should panic or at least log
-		return nil
-	}
-	return &cid
-}
-
 func (k Keeper) SetIscnKernel(ctx sdk.Context, iscnID IscnID, kernel IscnData) (*CID, error) {
 	// TODO: schemaVersion base on input context field
 	schemaVersion := uint64(1)
 	idBytes := iscnID.Bytes()
 	kernel.Set("id", idBytes)
-	cid, err := k.setIscnObjectAndEmitEvent(
+	return k.setIscnObjectAndEmitEvent(
 		ctx, kernel, IscnKernelCodecType, schemaVersion, EventTypeAddIscnKernel, AttributeKeyIscnKernelCid,
 	)
-	if err != nil {
-		return nil, err
-	}
-	cidBytes := cid.Bytes()
-	key := GetIscnKernelKey(idBytes)
-	ctx.KVStore(k.storeKey).Set(key, cidBytes)
-	key = GetCidToIscnIDKey(cidBytes)
-	ctx.KVStore(k.storeKey).Set(key, idBytes)
-	return cid, err
 }
 
-func (k Keeper) SetIscnOwner(ctx sdk.Context, iscnID IscnID, owner sdk.AccAddress) {
-	key := GetIscnOwnerKey(iscnID.Bytes())
-	ctx.KVStore(k.storeKey).Set(key, owner)
+func (k Keeper) SetIscnKernelRecord(ctx sdk.Context, iscnID IscnID, record KernelRecord) {
+	key := GetIscnKernelKey(iscnID.Bytes())
+	bz := k.cdc.MustMarshalBinaryLengthPrefixed(record)
+	ctx.KVStore(k.storeKey).Set(key, bz)
 }
 
-func (k Keeper) GetIscnOwner(ctx sdk.Context, iscnID IscnID) sdk.AccAddress {
-	key := GetIscnOwnerKey(iscnID.Bytes())
+func (k Keeper) GetIscnKernelRecord(ctx sdk.Context, iscnID IscnID) *KernelRecord {
+	key := GetIscnKernelKey(iscnID.Bytes())
 	bz := ctx.KVStore(k.storeKey).Get(key)
 	if bz == nil {
 		return nil
 	}
-	return sdk.AccAddress(bz)
+	record := KernelRecord{}
+	k.cdc.MustUnmarshalBinaryLengthPrefixed(bz, &record)
+	return &record
+}
+
+func (k Keeper) IterateIscnKernelRecords(ctx sdk.Context, f func(iscnID IscnID, record KernelRecord) bool) {
+	it := ctx.KVStore(k.storeKey).Iterator(IscnKernelKey, nil)
+	defer it.Close()
+	for ; it.Valid(); it.Next() {
+		iscnID := IscnIDFromBytes(it.Key())
+		record := KernelRecord{}
+		k.cdc.MustUnmarshalBinaryLengthPrefixed(it.Value(), &record)
+		if f(iscnID, record) {
+			break
+		}
+	}
 }
 
 func (k Keeper) SetIscnCount(ctx sdk.Context, count uint64) {
@@ -293,11 +268,15 @@ func (k Keeper) AddIscnKernel(
 	binary.Write(hasher, binary.BigEndian, iscnCount)
 	idBytes := hasher.Sum(nil)
 	iscnID = IscnIDFromBytes(idBytes)
-	_, err = k.SetIscnKernel(ctx, iscnID, kernel)
+	cid, err := k.SetIscnKernel(ctx, iscnID, kernel)
 	if err != nil {
 		return iscnID, err
 	}
-	k.SetIscnOwner(ctx, iscnID, owner)
+	record := KernelRecord{
+		Owner: owner,
+		CID:   *cid,
+	}
+	k.SetIscnKernelRecord(ctx, iscnID, record)
 	ctx.EventManager().EmitEvent(
 		sdk.NewEvent(
 			EventTypeCreateIscn,

@@ -17,8 +17,6 @@ var RightSchema = NewSchemaValidator(
 		InSchema(EntitySchema),
 	)),
 	Field("type", InType(String)),
-	// TODO: allow terms to be String, which will be pinned by IPFS module
-	// Field("terms", InType(NestedCID, String)),
 	Field("terms", IsCIDWithCodec(RightTermsCodecType)),
 	Field("period", Any(
 		InType(None),

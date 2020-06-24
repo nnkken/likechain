@@ -43,11 +43,15 @@ func queryParams(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.
 
 func queryKernel(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.Error) {
 	id := IscnIDFromBytes(req.Data)
-	kernelCID := k.GetIscnKernelCIDByIscnID(ctx, id)
-	if kernelCID == nil {
+	record := k.GetIscnKernelRecord(ctx, id)
+	if record == nil {
 		return nil, nil
 	}
-	return kernelCID.Bytes(), nil
+	res, err := json.MarshalIndent(record, "", "  ")
+	if err != nil {
+		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("failed to JSON marshal result", err.Error()))
+	}
+	return res, nil
 }
 
 func queryCID(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.Error) {

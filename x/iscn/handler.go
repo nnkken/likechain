@@ -15,8 +15,6 @@ func NewHandler(keeper Keeper) sdk.Handler {
 			return handleMsgCreateIscn(ctx, msg, keeper)
 		case MsgAddEntity:
 			return handleMsgAddEntity(ctx, msg, keeper)
-		case MsgAddRightTerms:
-			return handleMsgAddRightTerms(ctx, msg, keeper)
 		default:
 			errMsg := fmt.Sprintf("unrecognized iscn message type: %T", msg)
 			return sdk.ErrUnknownRequest(errMsg).Result()
@@ -42,9 +40,6 @@ func handleEntity(ctx sdk.Context, entity IscnDataField, keeper Keeper) (*CID, e
 
 func handleRightTerms(ctx sdk.Context, rightTerms IscnDataField, keeper Keeper) (*CID, error) {
 	switch rightTerms.Type() {
-	case String:
-		rt, _ := rightTerms.AsString()
-		return keeper.SetRightTerms(ctx, rt)
 	case NestedCID:
 		cid, _ := rightTerms.AsCID()
 		return cid, nil
@@ -222,8 +217,16 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 		kernel.Set("parent", *parentKernelCID)
 		iscnIDBytes, _ := parentKernelObj.GetBytes("id")
 		iscnID := IscnIDFromBytes(iscnIDBytes)
-		oldOwner := keeper.GetIscnOwner(ctx, iscnID)
-		if !oldOwner.Equals(msg.From) {
+		record := keeper.GetIscnKernelRecord(ctx, iscnID)
+		if record == nil {
+			// TODO: bug, should log or panic?
+			return sdk.Result{
+				Code:      123, // TODO
+				Codespace: DefaultCodespace,
+				Log:       fmt.Sprintf("unknown parent ISCN kernel CID: %s", parentKernelCID),
+			}
+		}
+		if !record.Owner.Equals(msg.From) {
 			return sdk.Result{
 				Code:      123, // TODO
 				Codespace: DefaultCodespace,
@@ -239,7 +242,7 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 				Log:       "invalid ISCN kernel version",
 			}
 		}
-		_, err = keeper.SetIscnKernel(ctx, iscnID, kernel)
+		cid, err := keeper.SetIscnKernel(ctx, iscnID, kernel)
 		if err != nil {
 			return sdk.Result{
 				Code:      123, // TODO
@@ -247,6 +250,8 @@ func handleMsgCreateIscn(ctx sdk.Context, msg MsgCreateIscn, keeper Keeper) sdk.
 				Log:       err.Error(),
 			}
 		}
+		record.CID = *cid
+		keeper.SetIscnKernelRecord(ctx, iscnID, *record)
 	default:
 		return sdk.Result{
 			Code:      123, // TODO
@@ -295,34 +300,6 @@ func handleMsgAddEntity(ctx sdk.Context, msg MsgAddEntity, keeper Keeper) sdk.Re
 		}
 	}
 	_, err = keeper.SetEntity(ctx, entity)
-	if err != nil {
-		return sdk.Result{
-			Code:      123, // TODO
-			Codespace: DefaultCodespace,
-			Log:       err.Error(),
-		}
-	}
-	ctx.EventManager().EmitEvent(
-		sdk.NewEvent(
-			sdk.EventTypeMessage,
-			sdk.NewAttribute(sdk.AttributeKeyModule, AttributeValueCategory),
-			sdk.NewAttribute(sdk.AttributeKeySender, msg.From.String()),
-		),
-	)
-	return sdk.Result{Events: ctx.EventManager().Events()}
-}
-
-func handleMsgAddRightTerms(ctx sdk.Context, msg MsgAddRightTerms, keeper Keeper) sdk.Result {
-	err := keeper.DeductFeeForIscn(ctx, msg.From, []byte(msg.RightTerms)) // TODO: different fee for terms
-	if err != nil {
-		return sdk.Result{
-			/* TODO: proper error*/
-			Code:      123,
-			Codespace: DefaultCodespace,
-			Log:       err.Error(),
-		}
-	}
-	_, err = keeper.SetRightTerms(ctx, msg.RightTerms)
 	if err != nil {
 		return sdk.Result{
 			Code:      123, // TODO
