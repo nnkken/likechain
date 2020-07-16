@@ -2,8 +2,6 @@ package types
 
 import (
 	"fmt"
-
-	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
 type CidData struct {
@@ -24,9 +22,7 @@ type GenesisState struct {
 
 func DefaultGenesisState() GenesisState {
 	return GenesisState{
-		Params: Params{
-			FeePerByte: sdk.NewDecCoin("nanolike", sdk.NewInt(10000)),
-		},
+		Params: DefaultParams(),
 	}
 }
 

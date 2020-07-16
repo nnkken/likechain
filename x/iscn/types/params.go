@@ -26,7 +26,9 @@ func (p *Params) ParamSetPairs() params.ParamSetPairs {
 }
 
 func DefaultParams() Params {
-	return Params{} // TODO: default param
+	return Params{
+		FeePerByte: sdk.NewDecCoin("nanolike", sdk.NewInt(10000)),
+	}
 }
 
 func (p Params) String() string {
