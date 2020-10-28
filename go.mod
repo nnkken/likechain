@@ -3,16 +3,15 @@ module github.com/likecoin/likechain
 go 1.14
 
 require (
-	github.com/cosmos/cosmos-sdk v0.39.1
-	github.com/gorilla/mux v1.7.4
-	github.com/ipfs/go-cid v0.0.7
-	github.com/ipfs/go-ipld-cbor v0.0.4
-	github.com/likecoin/iscn-ipld v0.0.0-20200517153629-3078d7917930
-	github.com/multiformats/go-multibase v0.0.3
-	github.com/polydawn/refmt v0.0.0-20190807091052-3d65705ee9f1
+	github.com/cosmos/cosmos-sdk v0.40.0-rc0
+	github.com/cosmos/gaia v0.0.1-0.20201013155758-3a8b1b414004
+	github.com/gorilla/mux v1.8.0
+	github.com/rakyll/statik v0.1.7
+	github.com/spf13/cast v1.3.1
 	github.com/spf13/cobra v1.0.0
-	github.com/spf13/viper v1.6.3
-	github.com/tendermint/go-amino v0.15.1
-	github.com/tendermint/tendermint v0.33.7
-	github.com/tendermint/tm-db v0.5.1
+	github.com/tendermint/tendermint v0.34.0-rc4.0.20201005135527-d7d0ffea13c6
+	github.com/tendermint/tm-db v0.6.2
+	go.etcd.io/etcd v0.0.0-20191023171146-3cf2f69b5738
 )
+
+replace github.com/gogo/protobuf => github.com/regen-network/protobuf v1.3.2-alpha.regen.4
