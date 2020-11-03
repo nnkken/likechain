@@ -18,6 +18,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/rpc"
 	"github.com/cosmos/cosmos-sdk/codec/types"
+	"github.com/cosmos/cosmos-sdk/std"
 
 	bam "github.com/cosmos/cosmos-sdk/baseapp"
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -29,6 +30,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth/ante"
 	authrest "github.com/cosmos/cosmos-sdk/x/auth/client/rest"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
+	authtx "github.com/cosmos/cosmos-sdk/x/auth/tx"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/cosmos-sdk/x/auth/vesting"
 	"github.com/cosmos/cosmos-sdk/x/bank"
@@ -67,10 +69,7 @@ import (
 	upgradeclient "github.com/cosmos/cosmos-sdk/x/upgrade/client"
 	upgradekeeper "github.com/cosmos/cosmos-sdk/x/upgrade/keeper"
 	upgradetypes "github.com/cosmos/cosmos-sdk/x/upgrade/types"
-
 	// "github.com/likecoin/likechain/x/iscn"
-
-	gaiaappparams "github.com/cosmos/gaia/app/params"
 )
 
 const appName = "LikeApp"
@@ -124,6 +123,32 @@ var (
 	}
 )
 
+// TODO: move to other places
+type EncodingConfig struct {
+	InterfaceRegistry types.InterfaceRegistry
+	Marshaler         codec.Marshaler
+	TxConfig          client.TxConfig
+	Amino             *codec.LegacyAmino
+}
+
+// MakeEncodingConfig creates an EncodingConfig for testing
+func MakeEncodingConfig() EncodingConfig {
+	cdc := codec.NewLegacyAmino()
+	interfaceRegistry := types.NewInterfaceRegistry()
+	marshaler := codec.NewProtoCodec(interfaceRegistry)
+	std.RegisterLegacyAminoCodec(cdc)
+	std.RegisterInterfaces(interfaceRegistry)
+	ModuleBasics.RegisterLegacyAminoCodec(cdc)
+	ModuleBasics.RegisterInterfaces(interfaceRegistry)
+
+	return EncodingConfig{
+		InterfaceRegistry: interfaceRegistry,
+		Marshaler:         marshaler,
+		TxConfig:          authtx.NewTxConfig(marshaler, authtx.DefaultSignModes),
+		Amino:             cdc,
+	}
+}
+
 // Extended ABCI application
 type LikeApp struct {
 	*bam.BaseApp
@@ -160,7 +185,7 @@ type LikeApp struct {
 func NewLikeApp(
 	logger log.Logger, db dbm.DB, traceStore io.Writer, loadLatest bool,
 	skipUpgradeHeights map[int64]bool, homePath string,
-	invCheckPeriod uint, encodingConfig gaiaappparams.EncodingConfig,
+	invCheckPeriod uint, encodingConfig EncodingConfig,
 	baseAppOptions ...func(*bam.BaseApp),
 ) *LikeApp {
 
@@ -172,7 +197,6 @@ func NewLikeApp(
 	bApp.SetCommitMultiStoreTracer(traceStore)
 	bApp.SetAppVersion(version.Version)
 	bApp.GRPCQueryRouter().SetInterfaceRegistry(interfaceRegistry)
-	bApp.GRPCQueryRouter().RegisterSimulateService(bApp.Simulate, interfaceRegistry)
 
 	keys := sdk.NewKVStoreKeys(
 		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey,
@@ -266,14 +290,13 @@ func NewLikeApp(
 	// NOTE: Any module instantiated in the module manager that is later modified
 	// must be passed by reference here.
 	app.mm = module.NewManager(
-		// genaccounts.NewAppModule(app.accountKeeper),
 		genutil.NewAppModule(
 			app.accountKeeper, app.stakingKeeper, app.BaseApp.DeliverTx, encodingConfig.TxConfig,
 		),
 		auth.NewAppModule(appCodec, app.accountKeeper, nil),
 		vesting.NewAppModule(app.accountKeeper, app.bankKeeper),
 		bank.NewAppModule(appCodec, app.bankKeeper, app.accountKeeper),
-		crisis.NewAppModule(&app.crisisKeeper),
+		crisis.NewAppModule(&app.crisisKeeper, true),
 		distr.NewAppModule(
 			appCodec, app.distrKeeper, app.accountKeeper, app.bankKeeper, app.stakingKeeper,
 		),
@@ -311,7 +334,7 @@ func NewLikeApp(
 
 	app.mm.RegisterInvariants(&app.crisisKeeper)
 	app.mm.RegisterRoutes(app.Router(), app.QueryRouter(), cdc)
-	app.mm.RegisterQueryServices(app.GRPCQueryRouter())
+	app.mm.RegisterServices(module.NewConfigurator(app.MsgServiceRouter(), app.GRPCQueryRouter()))
 
 	// initialize stores
 	app.MountKVStores(keys)
@@ -388,7 +411,7 @@ func (app *LikeApp) RegisterAPIRoutes(apiSvr *api.Server, apiConfig config.APICo
 	rpc.RegisterRoutes(clientCtx, apiSvr.Router)
 	authrest.RegisterTxRoutes(clientCtx, apiSvr.Router)
 	ModuleBasics.RegisterRESTRoutes(clientCtx, apiSvr.Router)
-	ModuleBasics.RegisterGRPCRoutes(apiSvr.ClientCtx, apiSvr.GRPCRouter)
+	ModuleBasics.RegisterGRPCGatewayRoutes(apiSvr.ClientCtx, apiSvr.GRPCRouter)
 
 	// register swagger API from root so that other applications can override easily
 	if apiConfig.Swagger {

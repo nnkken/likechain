@@ -39,10 +39,6 @@ import (
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
 
 	"github.com/likecoin/likechain/ip"
-
-	gaia "github.com/cosmos/gaia/app"
-	"github.com/cosmos/gaia/app/params"
-	gaiacmd "github.com/cosmos/gaia/cmd/gaiad/cmd"
 )
 
 // liked custom flags
@@ -78,8 +74,8 @@ func persistentPreRunEFn(ctx *server.Context) func(cmd *cobra.Command, args []st
 	}
 }
 
-func NewRootCmd() (*cobra.Command, params.EncodingConfig) {
-	encodingConfig := gaia.MakeEncodingConfig()
+func NewRootCmd() (*cobra.Command, app.EncodingConfig) {
+	encodingConfig := app.MakeEncodingConfig()
 
 	initClientCtx := client.Context{}.
 		WithJSONMarshaler(encodingConfig.Marshaler).
@@ -114,13 +110,13 @@ func NewRootCmd() (*cobra.Command, params.EncodingConfig) {
 	rootCmd.AddCommand(
 		genutilcli.InitCmd(app.ModuleBasics, app.DefaultNodeHome),
 		genutilcli.CollectGenTxsCmd(banktypes.GenesisBalancesIterator{}, app.DefaultNodeHome),
-		genutilcli.MigrateGenesisCmd(),
+		MigrateGenesisCmd(),
 		genutilcli.GenTxCmd(
 			app.ModuleBasics, encodingConfig.TxConfig, banktypes.GenesisBalancesIterator{},
 			app.DefaultNodeHome,
 		),
 		genutilcli.ValidateGenesisCmd(app.ModuleBasics, encodingConfig.TxConfig),
-		gaiacmd.AddGenesisAccountCmd(app.DefaultNodeHome),
+		// gaiacmd.AddGenesisAccountCmd(app.DefaultNodeHome),
 		tmcli.NewCompletionCmd(rootCmd, true),
 		debug.Cmd(),
 	)
@@ -136,7 +132,6 @@ func Execute() error {
 	ctx = context.WithValue(ctx, client.ClientContextKey, &client.Context{})
 	ctx = context.WithValue(ctx, server.ServerContextKey, server.NewDefaultContext())
 
-	// vvvvvvvvvvvvvvvv TESTING ONLY, REMOVE BEFORE COMMIT vvvvvvvvvvvvvvvv
 	for _, cmd := range rootCmd.Commands() {
 		if cmd.Use == "start" {
 			originalPreRunE := cmd.PreRunE
@@ -170,6 +165,7 @@ func Execute() error {
 		}
 	}
 
+	// vvvvvvvvvvvvvvvv TESTING ONLY, REMOVE BEFORE COMMIT vvvvvvvvvvvvvvvv
 	rootCmd.AddCommand(&cobra.Command{
 		Use: "dev-test",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -215,7 +211,7 @@ func newApp(
 		logger, db, traceStore, true, skipUpgradeHeights,
 		cast.ToString(appOpts.Get(flags.FlagHome)),
 		cast.ToUint(appOpts.Get(server.FlagInvCheckPeriod)),
-		gaia.MakeEncodingConfig(),
+		app.MakeEncodingConfig(),
 		baseapp.SetPruning(pruningOpts),
 		baseapp.SetMinGasPrices(cast.ToString(appOpts.Get(server.FlagMinGasPrices))),
 		baseapp.SetMinRetainBlocks(cast.ToUint64(appOpts.Get(server.FlagMinRetainBlocks))),
@@ -238,7 +234,7 @@ func exportAppState(
 	logger log.Logger, db dbm.DB, traceStore io.Writer, height int64, forZeroHeight bool,
 	jailAllowedAddrs []string,
 ) (servertypes.ExportedApp, error) {
-	encodingConfig := gaia.MakeEncodingConfig()
+	encodingConfig := app.MakeEncodingConfig()
 	encodingConfig.Marshaler = codec.NewProtoCodec(encodingConfig.InterfaceRegistry)
 	var likeApp *app.LikeApp
 	if height != -1 {
