@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,7 +11,6 @@ import (
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
 
-	"github.com/tendermint/tendermint/libs/cli"
 	"github.com/tendermint/tendermint/libs/log"
 	dbm "github.com/tendermint/tm-db"
 
@@ -26,9 +24,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/debug"
 	"github.com/cosmos/cosmos-sdk/client/flags"
+	"github.com/cosmos/cosmos-sdk/client/keys"
+	"github.com/cosmos/cosmos-sdk/client/rpc"
 
 	"github.com/cosmos/cosmos-sdk/server"
+	svrcmd "github.com/cosmos/cosmos-sdk/server/cmd"
 	servertypes "github.com/cosmos/cosmos-sdk/server/types"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	authclient "github.com/cosmos/cosmos-sdk/x/auth/client"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -37,6 +39,9 @@ import (
 	tmcli "github.com/tendermint/tendermint/libs/cli"
 
 	genutilcli "github.com/cosmos/cosmos-sdk/x/genutil/client/cli"
+
+	authcmd "github.com/cosmos/cosmos-sdk/x/auth/client/cli"
+	vestingcli "github.com/cosmos/cosmos-sdk/x/auth/vesting/client/cli"
 
 	"github.com/likecoin/likechain/ip"
 )
@@ -47,11 +52,14 @@ const flagGetIP = "get-ip"
 
 var shouldGetIP bool
 
-// TODO: iterate to find the `start` command, then add `--add-ip` flag
-// rootCmd.PersistentFlags().BoolVar(&shouldGetIP, flagGetIP, false, "Get external IP for Tendermint")
-func persistentPreRunEFn(ctx *server.Context) func(cmd *cobra.Command, args []string) error {
-	return func(cmd *cobra.Command, args []string) error {
+func addGetIpFlag(startCmd *cobra.Command) {
+	originalPreRunE := startCmd.PreRunE
+	startCmd.Flags().BoolVar(
+		&shouldGetIP, flagGetIP, false, "Get external IP for Tendermint p2p listen address",
+	)
+	startCmd.PreRunE = func(cmd *cobra.Command, args []string) error {
 		if shouldGetIP {
+			ctx := server.GetServerContextFromCmd(cmd)
 			laddr, err := url.Parse(ctx.Config.P2P.ListenAddress)
 			if err != nil {
 				return errors.New("cannot parse p2p.laddr")
@@ -70,8 +78,53 @@ func persistentPreRunEFn(ctx *server.Context) func(cmd *cobra.Command, args []st
 			ctx.Config.P2P.ExternalAddress = fmt.Sprintf("tcp://%s:%s", ip, laddr.Port())
 			fmt.Printf("p2p.external_address = %s\n", ctx.Config.P2P.ExternalAddress)
 		}
-		return nil
+		return originalPreRunE(cmd, args)
 	}
+}
+
+func queryCommand() *cobra.Command {
+	queryCmd := &cobra.Command{
+		Use:     "query",
+		Aliases: []string{"q"},
+		Short:   "Querying subcommands",
+	}
+
+	queryCmd.AddCommand(
+		authcmd.GetAccountCmd(),
+		rpc.ValidatorCommand(),
+		rpc.BlockCommand(),
+		authcmd.QueryTxsByEventsCmd(),
+		authcmd.QueryTxCmd(),
+	)
+
+	// add modules' query commands
+	app.ModuleBasics.AddQueryCommands(queryCmd)
+	queryCmd.PersistentFlags().String(flags.FlagChainID, "", "Chain ID of tendermint node")
+
+	return queryCmd
+}
+
+func txCommand() *cobra.Command {
+	txCmd := &cobra.Command{
+		Use:   "tx",
+		Short: "Transactions subcommands",
+	}
+
+	txCmd.AddCommand(
+		authcmd.GetSignCommand(),
+		authcmd.GetSignBatchCommand(),
+		authcmd.GetMultiSignCommand(),
+		authcmd.GetValidateSignaturesCommand(),
+		authcmd.GetBroadcastCommand(),
+		authcmd.GetEncodeCommand(),
+		authcmd.GetDecodeCommand(),
+		vestingcli.GetTxCmd(),
+	)
+
+	app.ModuleBasics.AddTxCommands(txCmd)
+	txCmd.PersistentFlags().String(flags.FlagChainID, "", "Chain ID of tendermint node")
+
+	return txCmd
 }
 
 func NewRootCmd() (*cobra.Command, app.EncodingConfig) {
@@ -115,55 +168,28 @@ func NewRootCmd() (*cobra.Command, app.EncodingConfig) {
 			app.ModuleBasics, encodingConfig.TxConfig, banktypes.GenesisBalancesIterator{},
 			app.DefaultNodeHome,
 		),
-		genutilcli.ValidateGenesisCmd(app.ModuleBasics, encodingConfig.TxConfig),
+		genutilcli.ValidateGenesisCmd(app.ModuleBasics),
 		// gaiacmd.AddGenesisAccountCmd(app.DefaultNodeHome),
 		tmcli.NewCompletionCmd(rootCmd, true),
 		debug.Cmd(),
 	)
 
-	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, exportAppState)
+	// TODO: crisis?
+	server.AddCommands(rootCmd, app.DefaultNodeHome, newApp, exportAppState, addGetIpFlag)
+
+	// add keybase, auxiliary RPC, query, and tx child commands
+	rootCmd.AddCommand(
+		rpc.StatusCommand(),
+		queryCommand(),
+		txCommand(),
+		keys.Commands(app.DefaultNodeHome),
+	)
+
 	return rootCmd, encodingConfig
 }
 
-func Execute() error {
+func Execute() {
 	rootCmd, _ := NewRootCmd()
-
-	ctx := context.Background()
-	ctx = context.WithValue(ctx, client.ClientContextKey, &client.Context{})
-	ctx = context.WithValue(ctx, server.ServerContextKey, server.NewDefaultContext())
-
-	for _, cmd := range rootCmd.Commands() {
-		if cmd.Use == "start" {
-			originalPreRunE := cmd.PreRunE
-			cmd.Flags().BoolVar(
-				&shouldGetIP, flagGetIP, false, "Get external IP for Tendermint p2p listen address",
-			)
-			cmd.PreRunE = func(cmd *cobra.Command, args []string) error {
-				if shouldGetIP {
-					ctx := server.GetServerContextFromCmd(cmd)
-					laddr, err := url.Parse(ctx.Config.P2P.ListenAddress)
-					if err != nil {
-						return errors.New("cannot parse p2p.laddr")
-					}
-					port := laddr.Port()
-					if port == "" {
-						return errors.New("cannot get port from p2p.laddr")
-					}
-					fmt.Println("getting external IP address")
-					ip, err := ip.RunProviders(ip.IPGetters, ip.DefaultTimeout)
-					if err != nil {
-						fmt.Println("Get IP failed, ignoring")
-						return nil
-					}
-					fmt.Printf("Got external IP: %s\n", ip)
-					ctx.Config.P2P.ExternalAddress = fmt.Sprintf("tcp://%s:%s", ip, laddr.Port())
-					fmt.Printf("p2p.external_address = %s\n", ctx.Config.P2P.ExternalAddress)
-				}
-				return originalPreRunE(cmd, args)
-			}
-			break
-		}
-	}
 
 	// vvvvvvvvvvvvvvvv TESTING ONLY, REMOVE BEFORE COMMIT vvvvvvvvvvvvvvvv
 	rootCmd.AddCommand(&cobra.Command{
@@ -174,8 +200,15 @@ func Execute() error {
 	})
 	// ^^^^^^^^^^^^^^^^ TESTING ONLY, REMOVE BEFORE COMMIT ^^^^^^^^^^^^^^^^
 
-	executor := cli.PrepareBaseCmd(rootCmd, "LIKE", app.DefaultNodeHome)
-	return executor.ExecuteContext(ctx)
+	if err := svrcmd.Execute(rootCmd, app.DefaultNodeHome); err != nil {
+		switch e := err.(type) {
+		case server.ErrorCode:
+			os.Exit(e.Code)
+
+		default:
+			os.Exit(1)
+		}
+	}
 }
 
 func newApp(
@@ -230,9 +263,10 @@ func newApp(
 	)
 }
 
+// TODO: see if need to use AppOptions
 func exportAppState(
 	logger log.Logger, db dbm.DB, traceStore io.Writer, height int64, forZeroHeight bool,
-	jailAllowedAddrs []string,
+	jailAllowedAddrs []string, _ servertypes.AppOptions,
 ) (servertypes.ExportedApp, error) {
 	encodingConfig := app.MakeEncodingConfig()
 	encodingConfig.Marshaler = codec.NewProtoCodec(encodingConfig.InterfaceRegistry)

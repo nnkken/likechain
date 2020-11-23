@@ -9,12 +9,16 @@ import (
 
 	"github.com/pkg/errors"
 
+	tmcrypto "github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/tendermint/tendermint/crypto/secp256k1"
+	"github.com/tendermint/tendermint/crypto/sr25519"
 	tmbytes "github.com/tendermint/tendermint/libs/bytes"
 	tmtypes "github.com/tendermint/tendermint/types"
 	tmtime "github.com/tendermint/tendermint/types/time"
 
 	"github.com/cosmos/cosmos-sdk/codec"
-	cryptocodec "github.com/cosmos/cosmos-sdk/crypto/codec"
+	kmultisig "github.com/cosmos/cosmos-sdk/crypto/keys/multisig"
 )
 
 const (
@@ -107,5 +111,22 @@ func GenesisDocFromFile(genDocFile string) (*GenesisDoc, error) {
 }
 
 func init() {
-	cryptocodec.RegisterCrypto(cdc)
+	// register tendermint crypto
+	cdc.RegisterInterface((*tmcrypto.PubKey)(nil), nil)
+	cdc.RegisterConcrete(sr25519.PubKey{},
+		sr25519.PubKeyName, nil)
+	cdc.RegisterConcrete(&ed25519.PubKey{},
+		ed25519.PubKeyName, nil)
+	cdc.RegisterConcrete(&secp256k1.PubKey{},
+		secp256k1.PubKeyName, nil)
+	cdc.RegisterConcrete(&kmultisig.LegacyAminoPubKey{},
+		kmultisig.PubKeyAminoRoute, nil)
+
+	cdc.RegisterInterface((*tmcrypto.PrivKey)(nil), nil)
+	cdc.RegisterConcrete(sr25519.PrivKey{},
+		sr25519.PrivKeyName, nil)
+	cdc.RegisterConcrete(&ed25519.PrivKey{},
+		ed25519.PrivKeyName, nil)
+	cdc.RegisterConcrete(&secp256k1.PrivKey{},
+		secp256k1.PrivKeyName, nil)
 }

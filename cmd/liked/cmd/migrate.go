@@ -27,11 +27,8 @@ const flagGenesisTime = "genesis-time"
 func migrateState(initialState types.AppMap, ctx client.Context) types.AppMap {
 	state := initialState
 	state = v038.Migrate(state, ctx)
-	fmt.Println("v0.38 migrated")
 	state = v039.Migrate(state, ctx)
-	fmt.Println("v0.39 migrated")
 	state = v040.Migrate(state, ctx)
-	fmt.Println("v0.40 migrated")
 	delete(state, "whitelist")
 	return state
 }
@@ -43,7 +40,7 @@ func MigrateGenesisCmd() *cobra.Command {
 		Long: (`Migrate the source genesis into the target version and print to STDOUT.
 
 Example:
-$ liked migrate /path/to/genesis.json --chain-id=likecoin-chain-fotan --genesis-time=2021-02-01T04:00:00Z
+$ liked migrate /path/to/genesis.json --chain-id=likecoin-chain-fotan --genesis-time=2021-12-31T04:00:00Z
 `),
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -69,6 +66,8 @@ $ liked migrate /path/to/genesis.json --chain-id=likecoin-chain-fotan --genesis-
 			newGenDoc.Validators = oldGenDoc.Validators
 
 			newGenState := migrateState(initialState, clientCtx)
+
+			// TODO: stakingGenesis.Params.HistoricalEntries = 10000
 
 			newGenDoc.AppState, err = json.Marshal(newGenState)
 			if err != nil {
